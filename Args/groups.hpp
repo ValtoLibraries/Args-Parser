@@ -67,16 +67,17 @@ public:
 	{
 	}
 
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::OnlyOneGroup;
+	}
+
 	//! \return Is this argument defined?
 	bool isDefined() const override
 	{
-		for( const auto & arg : children() )
-		{
-			if( arg->isDefined() )
-				return true;
-		}
-
-		return false;
+		return std::any_of( children().cbegin(), children().cend(),
+			[] ( const auto & arg ) { return arg->isDefined(); } );
 	}
 
 protected:
@@ -94,7 +95,7 @@ protected:
 	{
 		GroupIface::checkCorrectnessBeforeParsing( flags, names );
 
-		for( const auto & arg : children() )
+		for( const auto & arg : details::asConst( children() ) )
 		{
 			if( arg->isRequired() )
 				throw BaseException( String( SL( "Required argument \"" ) ) +
@@ -111,7 +112,7 @@ protected:
 
 		ArgIface * defined = nullptr;
 
-		for( const auto & arg : children() )
+		for( const auto & arg : details::asConst( children() ) )
 		{
 			if( arg->isDefined() )
 			{
@@ -121,7 +122,7 @@ protected:
 						SL( "Whereas defined \"" ) + defined->name() +
 						SL( "\" and \"" ) + arg->name() + SL( "\"." ) );
 				else
-					defined = arg;
+					defined = arg.get();
 			}
 		}
 	}
@@ -148,16 +149,17 @@ public:
 	{
 	}
 
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::AllOfGroup;
+	}
+
 	//! \return Is this argument defined?
 	bool isDefined() const override
 	{
-		for( const auto & arg : children() )
-		{
-			if( !arg->isDefined() )
-				return false;
-		}
-
-		return true;
+		return !std::any_of( children().cbegin(), children().cend(),
+			[] ( const auto & arg ) { return !arg->isDefined(); } );
 	}
 
 protected:
@@ -175,7 +177,7 @@ protected:
 	{
 		GroupIface::checkCorrectnessBeforeParsing( flags, names );
 
-		for( const auto & arg : children() )
+		for( const auto & arg : details::asConst( children() ) )
 		{
 			if( arg->isRequired() )
 				throw BaseException( String( SL( "Required argument \"" ) ) +
@@ -228,16 +230,17 @@ public:
 	{
 	}
 
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::AtLeastOneGroup;
+	}
+
 	//! \return Is this argument defined?
 	bool isDefined() const override
 	{
-		for( const auto & arg : children() )
-		{
-			if( arg->isDefined() )
-				return true;
-		}
-
-		return false;
+		return std::any_of( children().cbegin(), children().cend(),
+			[] ( const auto & arg ) { return arg->isDefined(); } );
 	}
 
 protected:
@@ -255,7 +258,7 @@ protected:
 	{
 		GroupIface::checkCorrectnessBeforeParsing( flags, names );
 
-		for( const auto & arg : children() )
+		for( const auto & arg : details::asConst( children() ) )
 		{
 			if( arg->isRequired() )
 				throw BaseException( String( SL( "Required argument \"" ) ) +

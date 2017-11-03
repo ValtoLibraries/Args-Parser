@@ -32,18 +32,18 @@
 #define ARGS__HELP_PRINTER_HPP__INCLUDED
 
 // C++ include.
-#include <list>
+#include <vector>
 #include <algorithm>
 #include <functional>
 
 // Args include.
 #include "utils.hpp"
-#include "cmd_line.hpp"
 #include "exceptions.hpp"
 #include "group_iface.hpp"
 #include "groups.hpp"
 #include "command.hpp"
 #include "types.hpp"
+#include "help_printer_iface.hpp"
 
 
 namespace Args {
@@ -59,23 +59,28 @@ class ArgIface;
 /*!
 	HelpPrinter is a class that prints help.
 */
-class HelpPrinter final {
+class HelpPrinter final
+	:	public HelpPrinterIface
+{
 public:
+	//! Smart pointer to the argument.
+	using ArgPtr = std::unique_ptr< ArgIface, details::Deleter< ArgIface > >;
+
 	HelpPrinter();
 
-	~HelpPrinter();
+	virtual ~HelpPrinter();
 
 	//! Print help for all arguments.
 	void print(
 		//! Output stream for the printing help.
-		OutStreamType & to );
+		OutStreamType & to ) override;
 
 	//! Print help for the given argument.
 	void print(
 		//! Name of the argument. I.e. "-t" or "--timeout".
 		const String & name,
 		//! Output stream for the printing help.
-		OutStreamType & to );
+		OutStreamType & to ) override;
 
 	//! Print help for command's argument.
 	void print(
@@ -84,19 +89,25 @@ public:
 		//! Name of the argument. I.e. "-t" or "--timeout".
 		const String & name,
 		//! Output stream for the printing help.
-		OutStreamType & to );
+		OutStreamType & to ) override;
 
 	//! Set executable name.
-	void setExecutable( const String & exe );
+	void setExecutable( const String & exe ) override;
 
 	//! Set description for the application.
-	void setAppDescription( const String & desc );
+	void setAppDescription( const String & desc ) override;
 
 	//! Set command line.
-	void setCmdLine( CmdLine * cmd );
+	void setCmdLine( CmdLine * cmd ) override;
 
 	//! Set line length for the help.
-	void setLineLength( String::size_type length );
+	void setLineLength( String::size_type length ) override;
+
+	//! \return Argument for the given name.
+	ArgIface * findArgument( const String & name ) override
+	{
+		return m_cmdLine->findArgument( name );
+	}
 
 private:
 	//! \return List of words with usage string for the argument.
@@ -112,10 +123,10 @@ private:
 	//! Print help for the argument.
 	void print( ArgIface * arg, OutStreamType & to ) const;
 	//! Sort argument.
-	void sortArg( ArgIface * arg,
-		std::list< Command* > & commands,
-		std::list< ArgIface* > & required,
-		std::list< ArgIface* > & optional,
+	void sortArg( const ArgPtr & arg,
+		std::vector< Command* > & commands,
+		std::vector< ArgIface* > & required,
+		std::vector< ArgIface* > & optional,
 		String::size_type & maxFlag,
 		String::size_type & maxName,
 		String::size_type & maxCommand,
@@ -168,7 +179,8 @@ calcMaxFlagAndName( ArgIface * arg, String::size_type & maxFlag,
 {
 	String::size_type f = 1;
 	String::size_type n = ( !arg->argumentName().empty() ?
-		arg->argumentName().length() : arg->name().length() );
+		arg->argumentName().length() : ( arg->flag().empty() ?
+			arg->name().length() : 0 ) );
 
 	if( arg->isWithValue() )
 	{
@@ -186,20 +198,21 @@ calcMaxFlagAndName( ArgIface * arg, String::size_type & maxFlag,
 }
 
 inline void
-HelpPrinter::sortArg( ArgIface * arg,
-	std::list< Command* > & commands,
-	std::list< ArgIface* > & required,
-	std::list< ArgIface* > & optional,
+HelpPrinter::sortArg( const ArgPtr & arg,
+	std::vector< Command* > & commands,
+	std::vector< ArgIface* > & required,
+	std::vector< ArgIface* > & optional,
 	String::size_type & maxFlag,
 	String::size_type & maxName,
 	String::size_type & maxCommand,
 	bool requiredAllOfGroup ) const
 {
-	GroupIface * g = dynamic_cast< GroupIface* > ( arg );
-	Command * cmd = dynamic_cast< Command* > ( arg );
+	GroupIface * g = dynamic_cast< GroupIface* > ( arg.get() );
 
-	if( cmd )
+	if( arg->type() == ArgType::Command )
 	{
+		Command * cmd = static_cast< Command* > ( arg.get() );
+
 		commands.push_back( cmd );
 
 		String::size_type length = cmd->name().length() + ( cmd->isWithValue() ?
@@ -210,7 +223,7 @@ HelpPrinter::sortArg( ArgIface * arg,
 	}
 	else if( g )
 	{
-		if( g->isRequired() && dynamic_cast< AllOfGroup* > ( g ) )
+		if( g->isRequired() && g->type() == ArgType::AllOfGroup )
 			requiredAllOfGroup = true;
 		else
 			requiredAllOfGroup = false;
@@ -227,17 +240,17 @@ HelpPrinter::sortArg( ArgIface * arg,
 	else
 	{
 		if( arg->isRequired() || requiredAllOfGroup )
-			required.push_back( arg );
+			required.push_back( arg.get() );
 		else
-			optional.push_back( arg );
+			optional.push_back( arg.get() );
 
-		calcMaxFlagAndName( arg, maxFlag, maxName );
+		calcMaxFlagAndName( arg.get(), maxFlag, maxName );
 	}
 }
 
 inline void
 HelpPrinter::printOnlyFor( ArgIface * arg, OutStreamType & to,
-	String::size_type beforeDescription, String::size_type maxFlag ) const
+	String::size_type beforeDescription, String::size_type ) const
 {
 	String::size_type pos = 0;
 
@@ -261,8 +274,8 @@ HelpPrinter::printOnlyFor( ArgIface * arg, OutStreamType & to,
 	}
 	else
 	{
-		printOffset( to, pos, maxFlag + 1 );
-		pos += maxFlag + 1;
+		printOffset( to, pos, 4 );
+		pos = 4;
 	}
 
 	if( !arg->argumentName().empty() )
@@ -278,7 +291,7 @@ HelpPrinter::printOnlyFor( ArgIface * arg, OutStreamType & to,
 			pos += arg->valueSpecifier().length() + 3;
 		}
 	}
-	else
+	else if( arg->flag().empty() && arg->argumentName().empty() )
 	{
 		to << ' ';
 		++pos;
@@ -300,12 +313,40 @@ HelpPrinter::printOnlyFor( ArgIface * arg, OutStreamType & to,
 	to.flush();
 }
 
+namespace details {
+
+template< typename T >
+bool argNameLess( const T & a1, const T & a2 )
+{
+	static const Char dash = SL( '-' );
+
+	if( !a1->name().empty() && !a2->name().empty() )
+	{
+		if( *( a1->name().cbegin() ) != dash &&
+				*( a2->name().cbegin() ) == dash )
+			return true;
+		else if( *( a1->name().cbegin() ) == dash &&
+				*( a2->name().cbegin() ) != dash )
+			return false;
+		else if( a1->argumentName().empty() && !a2->argumentName().empty() )
+			return true;
+		else if( !a1->argumentName().empty() && a2->argumentName().empty() )
+			return false;
+		else
+			return ( a1->name() < a2->name() );
+	}
+	else
+		return ( a1->name() < a2->name() );
+}
+
+} /* namespace details */
+
 inline void
 HelpPrinter::print( OutStreamType & to )
 {
-	std::list< ArgIface* > required;
-	std::list< ArgIface* > optional;
-	std::list< Command* > commands;
+	std::vector< ArgIface* > required;
+	std::vector< ArgIface* > optional;
+	std::vector< Command* > commands;
 
 	String::size_type maxFlag = 0;
 	String::size_type maxName = 0;
@@ -321,6 +362,19 @@ HelpPrinter::print( OutStreamType & to )
 
 	std::for_each( m_cmdLine->arguments().cbegin(),
 		m_cmdLine->arguments().cend(), f );
+
+	// Sort arguments by name.
+	std::sort( required.begin(), required.end(),
+		[] ( const auto & a1, const auto & a2 )
+			{ return details::argNameLess( a1, a2 ); } );
+
+	std::sort( optional.begin(), optional.end(),
+		[] ( const auto & a1, const auto & a2 )
+			{ return details::argNameLess( a1, a2 ); } );
+
+	std::sort( commands.begin(), commands.end(),
+		[] ( const auto & c1, const auto & c2 )
+			{ return details::argNameLess( c1, c2 ); } );
 
 	maxFlag += 2;
 	maxName += 2;
@@ -344,7 +398,8 @@ HelpPrinter::print( OutStreamType & to )
 				const StringList words = createUsageString( arg,
 					requiredFlag );
 
-				usage.insert( usage.end(), words.cbegin(), words.cend() );
+				for( const auto & w : details::asConst( words ) )
+					usage.push_back( w );
 			};
 
 		std::for_each( required.cbegin(), required.cend(),
@@ -363,7 +418,7 @@ HelpPrinter::print( OutStreamType & to )
 	}
 	else
 	{
-		to << "Usage: " << m_exeName << " <commands>";
+		to << "Usage: " << m_exeName << " <command>";
 
 		if( !optional.empty() || !required.empty() )
 			to << " <args>";
@@ -392,11 +447,13 @@ HelpPrinter::print( OutStreamType & to )
 				to << "\n";
 			} );
 
-		to << "\n" << "\n";
+		to << "\n";
 	}
 
 	auto printArg = std::bind( &HelpPrinter::printOnlyFor, this,
-		std::placeholders::_1, std::ref( to ), maxFlag + 1 + maxName + 2,
+		std::placeholders::_1, std::ref( to ),
+			( maxFlag == 1 ? maxName + 6 : ( maxName + 6 > maxFlag + 1 ?
+				maxName + 6 : maxFlag + 1 ) ),
 		maxFlag );
 
 	if( !required.empty() )
@@ -419,122 +476,140 @@ HelpPrinter::print( OutStreamType & to )
 inline void
 HelpPrinter::print( const String & name, OutStreamType & to )
 {
-	try {
-		ArgIface * arg = m_cmdLine->findArgument( name );
+	auto * arg = m_cmdLine->findArgument( name );
 
-		Command * cmd = dynamic_cast < Command* > ( arg );
+	if( arg && arg->type() == ArgType::Command )
+	{
+		Command * cmd = static_cast < Command* > ( arg );
 
-		if( cmd )
-		{
-			// Prepare global arguments.
-			std::list< ArgIface* > grequired;
-			std::list< ArgIface* > goptional;
-			std::list< Command* > gcommands;
+		// Prepare global arguments.
+		std::vector< ArgIface* > grequired;
+		std::vector< ArgIface* > goptional;
+		std::vector< Command* > gcommands;
 
-			String::size_type gmaxFlag = 0;
-			String::size_type gmaxName = 0;
-			String::size_type gmaxCommand = 0;
+		String::size_type gmaxFlag = 0;
+		String::size_type gmaxName = 0;
+		String::size_type gmaxCommand = 0;
 
-			bool requiredAllOfGroup = false;
+		bool requiredAllOfGroup = false;
 
-			auto gf = std::bind( &HelpPrinter::sortArg, this, std::placeholders::_1,
-				std::ref( gcommands ), std::ref( grequired ),
-				std::ref( goptional ), std::ref( gmaxFlag ),
-				std::ref( gmaxName ), std::ref( gmaxCommand ),
-				requiredAllOfGroup );
+		auto gf = std::bind( &HelpPrinter::sortArg, this, std::placeholders::_1,
+			std::ref( gcommands ), std::ref( grequired ),
+			std::ref( goptional ), std::ref( gmaxFlag ),
+			std::ref( gmaxName ), std::ref( gmaxCommand ),
+			requiredAllOfGroup );
 
-			std::for_each( m_cmdLine->arguments().cbegin(),
-				m_cmdLine->arguments().cend(), gf );
+		std::for_each( m_cmdLine->arguments().cbegin(),
+			m_cmdLine->arguments().cend(), gf );
 
-			gmaxFlag += 2;
-			gmaxName += 2;
+		// Sort global arguments by name.
+		std::sort( grequired.begin(), grequired.end(),
+			[] ( const auto & a1, const auto & a2 )
+				{ return details::argNameLess( a1, a2 ); } );
+
+		std::sort( goptional.begin(), goptional.end(),
+			[] ( const auto & a1, const auto & a2 )
+				{ return details::argNameLess( a1, a2 ); } );
+
+		gmaxFlag += 2;
+		gmaxName += 2;
 //			gmaxCommand += 2;
 
-			// Prepare arguments of command.
-			std::list< ArgIface* > required;
-			std::list< ArgIface* > optional;
-			std::list< Command* > commands;
+		// Prepare arguments of command.
+		std::vector< ArgIface* > required;
+		std::vector< ArgIface* > optional;
+		std::vector< Command* > commands;
 
-			String::size_type maxFlag = 0;
-			String::size_type maxName = 0;
-			String::size_type maxCommand = 0;
+		String::size_type maxFlag = 0;
+		String::size_type maxName = 0;
+		String::size_type maxCommand = 0;
 
-			requiredAllOfGroup = false;
+		requiredAllOfGroup = false;
 
-			auto f = std::bind( &HelpPrinter::sortArg, this, std::placeholders::_1,
-				std::ref( commands ), std::ref( required ),
-				std::ref( optional ), std::ref( maxFlag ),
-				std::ref( maxName ), std::ref( maxCommand ),
-				requiredAllOfGroup );
+		auto f = std::bind( &HelpPrinter::sortArg, this, std::placeholders::_1,
+			std::ref( commands ), std::ref( required ),
+			std::ref( optional ), std::ref( maxFlag ),
+			std::ref( maxName ), std::ref( maxCommand ),
+			requiredAllOfGroup );
 
-			std::for_each( cmd->children().cbegin(),
-				cmd->children().cend(), f );
+		std::for_each( cmd->children().cbegin(),
+			cmd->children().cend(), f );
 
-			maxFlag += 2;
-			maxName += 2;
+		// Sort arguments by name.
+		std::sort( required.begin(), required.end(),
+			[] ( const auto & a1, const auto & a2 )
+				{ return details::argNameLess( a1, a2 ); } );
+
+		std::sort( optional.begin(), optional.end(),
+			[] ( const auto & a1, const auto & a2 )
+				{ return details::argNameLess( a1, a2 ); } );
+
+		maxFlag += 2;
+		maxName += 2;
 //			maxCommand += 2;
 
-			// Print.
-			printString( to, splitToWords( cmd->longDescription() ), 0, 0, 0 );
+		// Print.
+		printString( to, splitToWords( cmd->longDescription() ), 0, 0, 0 );
 
-			to << "\n" << "\n";
+		to << "\n" << "\n";
 
-			// Print command's arguments.
-			auto printArg = std::bind( &HelpPrinter::printOnlyFor, this,
-				std::placeholders::_1, std::ref( to ), maxFlag + 1 + maxName + 2,
-				maxFlag );
+		// Print command's arguments.
+		auto printArg = std::bind( &HelpPrinter::printOnlyFor, this,
+			std::placeholders::_1, std::ref( to ),
+			( maxFlag == 1 ? maxName + 6 : ( maxName + 6 > maxFlag + 1 ?
+				maxName + 6 : maxFlag + 1 ) ),
+			maxFlag );
 
-			if( !required.empty() )
+		if( !required.empty() )
+		{
+			to << "Required arguments:" << "\n";
+
+			std::for_each( required.cbegin(), required.cend(), printArg );
+		}
+
+		if( !optional.empty() )
+		{
+			to << "Optional arguments:" << "\n";
+
+			std::for_each( optional.cbegin(), optional.cend(), printArg );
+		}
+
+		if( !required.empty() || !optional.empty() )
+			to << "\n";
+
+		// Print global arguments.
+		if( !grequired.empty() || !goptional.empty() )
+		{
+			to << "Global arguments:" << "\n" << "\n";
+
+			auto printGlobalArg = std::bind( &HelpPrinter::printOnlyFor, this,
+				std::placeholders::_1, std::ref( to ),
+				( gmaxFlag == 1 ? gmaxName + 6 : ( gmaxName + 6 > gmaxFlag + 1 ?
+					gmaxName + 6 : gmaxFlag + 1 ) ), gmaxFlag );
+
+			if( !grequired.empty() )
 			{
 				to << "Required arguments:" << "\n";
 
-				std::for_each( required.cbegin(), required.cend(), printArg );
+				std::for_each( grequired.cbegin(), grequired.cend(),
+					printGlobalArg );
 			}
 
-			if( !optional.empty() )
+			if( !goptional.empty() )
 			{
 				to << "Optional arguments:" << "\n";
 
-				std::for_each( optional.cbegin(), optional.cend(), printArg );
+				std::for_each( goptional.cbegin(), goptional.cend(),
+					printGlobalArg );
 			}
-
-			to << "\n";
-
-			// Print global arguments.
-			if( !grequired.empty() || !goptional.empty() )
-			{
-				to << "Global arguments:" << "\n" << "\n";
-
-				auto printGlobalArg = std::bind( &HelpPrinter::printOnlyFor, this,
-					std::placeholders::_1, std::ref( to ),
-					gmaxFlag + 1 + gmaxName + 2, gmaxFlag );
-
-				if( !grequired.empty() )
-				{
-					to << "Required arguments:" << "\n";
-
-					std::for_each( grequired.cbegin(), grequired.cend(),
-						printGlobalArg );
-				}
-
-				if( !goptional.empty() )
-				{
-					to << "Optional arguments:" << "\n";
-
-					std::for_each( goptional.cbegin(), goptional.cend(),
-						printGlobalArg );
-				}
-			}
-
-			to.flush();
 		}
-		else
-			print( arg, to );
+
+		to.flush();
 	}
-	catch( const BaseException & )
-	{
+	else if( arg )
+		print( arg, to );
+	else
 		print( to );
-	}
 }
 
 inline void
@@ -617,7 +692,7 @@ HelpPrinter::createUsageString( ArgIface * arg, bool required ) const
 		usage.append( SL( "--" ) );
 		usage.append( arg->argumentName() );
 	}
-	else
+	else if( arg->flag().empty() && arg->argumentName().empty() )
 		usage.append( arg->name() );
 
 	if( arg->isWithValue() )
@@ -750,22 +825,12 @@ HelpPrinter::print( Command * cmd, const String & name,
 {
 	if( cmd )
 	{
-		ArgIface * arg = cmd->isItYourChild( name );
+		ArgIface * arg = cmd->findChild( name );
 
 		if( arg )
 			print( arg, to );
 		else
-		{
-			try {
-				arg = m_cmdLine->findArgument( name );
-
-				print( arg, to );
-			}
-			catch( const BaseException & )
-			{
-				print( cmd->name(), to );
-			}
-		}
+			print( cmd->name(), to );
 	}
 	else
 		print( to );

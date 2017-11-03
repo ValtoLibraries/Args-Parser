@@ -28,12 +28,6 @@
 	OTHER DEALINGS IN THE SOFTWARE.
 */
 
-/*!
-	\file
-
-	\warning If you are including this file you should include command.hpp too.
-*/
-
 #ifndef ARGS__GROUP_IFACE_HPP__INCLUDED
 #define ARGS__GROUP_IFACE_HPP__INCLUDED
 
@@ -44,10 +38,11 @@
 #include "types.hpp"
 
 // C++ include.
-#include <list>
+#include <vector>
 #include <type_traits>
 #include <algorithm>
 #include <utility>
+#include <memory>
 
 
 namespace Args {
@@ -68,8 +63,10 @@ public:
 	static const String m_dummyEmptyString;
 
 public:
+	//! Smart pointer to the argument.
+	using ArgPtr = std::unique_ptr< ArgIface, details::Deleter< ArgIface > >;
 	//! List of child arguments.
-	typedef std::list< ArgIface* > Arguments;
+	using Arguments = std::vector< ArgPtr >;
 
 	template< typename T >
 	explicit GroupIface( T && name,
@@ -89,36 +86,62 @@ public:
 		return m_children;
 	}
 
-	//! Add argument.
+	//! Add argument. \note Developer should handle lifetime of the argument.
 	template< typename T >
 	typename std::enable_if< std::is_base_of< ArgIface, T >::value &&
 		!std::is_base_of< Command, T >::value >::type
 	addArg( T & arg )
 	{
-		if( dynamic_cast< Command* > ( &arg ) )
+		if( arg.type() == ArgType::Command )
 			throw BaseException( String( SL( "Commands not allowed in groups. "
 				"You are trying to add command \"" ) ) + arg.name() +
 				SL( "\" to group \"" ) + name() + SL( "\"." ) );
 
-		if( std::find( m_children.cbegin(), m_children.cend(), &arg ) ==
+		if( std::find( m_children.cbegin(), m_children.cend(),
+			ArgPtr( &arg, details::Deleter< ArgIface > ( false ) ) ) ==
 			m_children.cend() )
-				m_children.push_back( &arg );
+				m_children.push_back(
+					ArgPtr( &arg, details::Deleter< ArgIface > ( false ) ) );
+
+		if( cmdLine() )
+			arg.setCmdLine( cmdLine() );
 	}
 
-	//! Add argument.
+	//! Add argument. \note Developer should handle lifetime of the argument.
 	template< typename T >
 	typename std::enable_if< std::is_base_of< ArgIface, T >::value &&
 		!std::is_base_of< Command, T >::value >::type
 	addArg( T * arg )
 	{
-		if( dynamic_cast< Command* > ( arg ) )
+		if( arg->type() == ArgType::Command )
 			throw BaseException( String( SL( "Commands not allowed in groups. "
 				"You are trying to add command \"" ) ) + arg->name() +
 				SL( "\" to group \"" ) + name() + SL( "\"." ) );
 
+		if( std::find( m_children.cbegin(), m_children.cend(),
+			ArgPtr( arg, details::Deleter< ArgIface > ( false ) ) ) ==
+				m_children.cend() )
+					m_children.push_back(
+						ArgPtr( arg, details::Deleter< ArgIface > ( false ) ) );
+
+		if( cmdLine() )
+			arg->setCmdLine( cmdLine() );
+	}
+
+	//! Add argument.
+	void addArg( ArgPtr arg )
+	{
+		if( arg->type() == ArgType::Command )
+			throw BaseException( String( SL( "Commands not allowed in groups. "
+				"You are trying to add command \"" ) ) + arg->name() +
+				SL( "\" to group \"" ) + name() + SL( "\"." ) );
+
+		if( cmdLine() )
+			arg->setCmdLine( cmdLine() );
+
 		if( std::find( m_children.cbegin(), m_children.cend(), arg ) ==
 			m_children.cend() )
-				m_children.push_back( arg );
+				m_children.push_back( std::move( arg ) );
 	}
 
 	/*!
@@ -180,6 +203,13 @@ public:
 		return m_dummyEmptyString;
 	}
 
+	//! Clear state of the argument.
+	void clear() override
+	{
+		std::for_each( children().begin(), children().end(),
+			[ & ] ( const auto & ch ) { ch->clear(); } );
+	}
+
 protected:
 	/*!
 		\return Argument for the given name.
@@ -188,17 +218,47 @@ protected:
 			argument with the given name.
 		\retval nullptr if this argument doesn't know about
 			argument with name.
+
+		\note Looks only in children.
 	*/
-	ArgIface * isItYou(
+	ArgIface * findArgument(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
 		*/
 		const String & name ) override
 	{
-		for( auto & arg : m_children )
+		for( const auto & arg : details::asConst( m_children ) )
 		{
-			ArgIface * tmp = arg->isItYou( name );
+			ArgIface * tmp = arg->findArgument( name );
+
+			if( tmp != nullptr )
+				return tmp;
+		}
+
+		return nullptr;
+	}
+
+	/*!
+		\return Argument for the given name.
+
+		\retval Pointer to the ArgIface if this argument handles
+			argument with the given name.
+		\retval nullptr if this argument doesn't know about
+			argument with name.
+
+		\note Looks only in children.
+	*/
+	const ArgIface * findArgument(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & name ) const override
+	{
+		for( const auto & arg : details::asConst( m_children ) )
+		{
+			const ArgIface * tmp = arg->findArgument( name );
 
 			if( tmp != nullptr )
 				return tmp;
@@ -230,14 +290,14 @@ protected:
 		//! All known names.
 		StringList & names ) const override
 	{
-		for( const auto & arg : m_children )
+		for( const auto & arg : details::asConst( m_children ) )
 			arg->checkCorrectnessBeforeParsing( flags, names );
 	}
 
 	//! Check correctness of the argument after parsing.
 	void checkCorrectnessAfterParsing() const override
 	{
-		for( const auto & arg : m_children )
+		for( const auto & arg : details::asConst( m_children ) )
 			arg->checkCorrectnessAfterParsing();
 
 		if( isRequired() && !isDefined() )
@@ -251,8 +311,27 @@ protected:
 	{
 		ArgIface::setCmdLine( cmdLine );
 
-		for( const auto & arg : m_children )
+		for( const auto & arg : details::asConst( m_children ) )
 			arg->setCmdLine( cmdLine );
+	}
+
+	//! \return Is given name a misspelled name of the argument.
+	bool isMisspelledName(
+		//! Name to check (misspelled).
+		const String & name,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const override
+	{
+		bool ret = false;
+
+		std::for_each( children().cbegin(), children().cend(),
+			[ & ] ( const auto & ch )
+			{
+				if( ch->isMisspelledName( name, possibleNames ) )
+					ret = true;
+			} );
+
+		return ret;
 	}
 
 private:

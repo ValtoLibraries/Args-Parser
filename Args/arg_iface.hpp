@@ -34,6 +34,7 @@
 // Args include.
 #include "utils.hpp"
 #include "types.hpp"
+#include "enums.hpp"
 
 
 namespace Args {
@@ -61,6 +62,9 @@ public:
 	virtual ~ArgIface()
 	{
 	}
+
+	//! \return Type of the argument.
+	virtual ArgType type() const = 0;
 
 	/*!
 		\return Name of the argument.
@@ -100,6 +104,16 @@ public:
 		return m_cmdLine;
 	}
 
+	//! \return Is given name a misspelled name of the argument.
+	virtual bool isMisspelledName(
+		//! Name to check (misspelled).
+		const String & name,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const = 0;
+
+	//! Clear state of the argument.
+	virtual void clear() = 0;
+
 protected:
 	/*!
 		\return Argument for the given name.
@@ -109,12 +123,27 @@ protected:
 		\retval nullptr if this argument doesn't know about
 			argument with name.
 	*/
-	virtual ArgIface * isItYou(
+	virtual ArgIface * findArgument(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
 		*/
 		const String & name ) = 0;
+
+	/*!
+		\return Argument for the given name.
+
+		\retval Pointer to the ArgIface if this argument handles
+			argument with the given name.
+		\retval nullptr if this argument doesn't know about
+			argument with name.
+	*/
+	virtual const ArgIface * findArgument(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & name ) const = 0;
 
 	/*!
 		Process argument's staff, for example take values from

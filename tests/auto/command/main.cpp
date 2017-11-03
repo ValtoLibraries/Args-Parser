@@ -44,7 +44,7 @@ using namespace Args;
 #endif
 
 
-TEST( CommandCase, TestAllIsOk )
+TEST( CommandCase, TestAllIsOk1 )
 {
 	const int argc = 7;
 	const CHAR * argv[ argc ] = { SL( "program.exe" ),
@@ -250,6 +250,129 @@ TEST( CommandCase, TestAllIsOk4 )
 
 	CHECK_CONDITION( c.isDefined() == false )
 	CHECK_CONDITION( d.isDefined() == false )
+}
+
+TEST( CommandCase, TestAllIsOk5 )
+{
+	const int argc = 1;
+	const CHAR * argv[ argc ] = { SL( "program.exe" ) };
+
+	CmdLine cmd( argc, argv );
+
+	Command a( SL( "add" ), ValueOptions::ManyValues );
+
+	cmd.addArg( a );
+
+	cmd.parse();
+
+	CHECK_CONDITION( a.isDefined() == false )
+	CHECK_CONDITION( a.value().empty() )
+	CHECK_CONDITION( a.values().empty() )
+	CHECK_CONDITION( a.defaultValue().empty() )
+	CHECK_CONDITION( a.defaultValues().empty() )
+}
+
+TEST( CommandCase, TestAllIsOk6 )
+{
+	const int argc = 1;
+	const CHAR * argv[ argc ] = { SL( "program.exe" ) };
+
+	CmdLine cmd( argc, argv );
+
+	Command a( SL( "add" ), ValueOptions::ManyValues );
+	a.setDefaultValue( SL( "default" ) );
+
+	cmd.addArg( a );
+
+	cmd.parse();
+
+	CHECK_CONDITION( a.isDefined() == false )
+	CHECK_CONDITION( a.value() == SL( "default" ) )
+	CHECK_CONDITION( a.values().size() == 1 )
+	CHECK_CONDITION( a.values().front() == SL( "default" ) )
+	CHECK_CONDITION( a.defaultValue() == SL( "default" ) )
+	CHECK_CONDITION( a.defaultValues().size() == 1 )
+	CHECK_CONDITION( a.defaultValues().front() == SL( "default" ) )
+}
+
+TEST( CommandCase, TestMisspelling )
+{
+	CmdLine cmd;
+
+	Command add( SL( "add" ) );
+
+	ArgAsCommand file( SL( "file" ) );
+	add.addArg( file );
+
+	cmd.addArg( add );
+
+	StringList correct;
+
+	CHECK_CONDITION( add.isMisspelledName( SL( "dad" ), correct ) )
+	CHECK_CONDITION( correct.size() == 1 )
+	CHECK_CONDITION( correct.front() == SL( "add" ) )
+
+	correct.clear();
+
+	CHECK_CONDITION( add.isMisspelledName( SL( "fiel" ), correct ) )
+	CHECK_CONDITION( correct.size() == 1 )
+	CHECK_CONDITION( correct.front() == SL( "file" ) )
+
+	correct.clear();
+
+	CHECK_CONDITION( !add.isMisspelledCommand( SL( "fiel" ), correct ) )
+
+	CHECK_CONDITION( add.isMisspelledCommand( SL( "dad" ), correct ) )
+	CHECK_CONDITION( correct.size() == 1 )
+	CHECK_CONDITION( correct.front() == SL( "add" ) )
+
+	correct.clear();
+
+	CHECK_CONDITION( cmd.isMisspelledName( SL( "dad" ), correct ) )
+	CHECK_CONDITION( correct.size() == 1 )
+	CHECK_CONDITION( correct.front() == SL( "add" ) )
+}
+
+TEST( CommandCase, TestStuff )
+{
+	Command add( SL( "add" ) );
+
+	ArgIface & a = add;
+
+	CHECK_CONDITION( a.description().empty() )
+	CHECK_CONDITION( a.longDescription().empty() )
+
+	add.setDescription( SL( "desc" ) );
+
+	CHECK_CONDITION( a.description() == SL( "desc" ) )
+	CHECK_CONDITION( a.longDescription() == SL( "desc" ) )
+
+	add.setLongDescription( SL( "long" ) );
+
+	CHECK_CONDITION( a.description() == SL( "desc" ) )
+	CHECK_CONDITION( a.longDescription() == SL( "long" ) )
+
+	CHECK_CONDITION( a.valueSpecifier().empty() )
+
+	add.setValueSpecifier( SL( "val" ) );
+
+	CHECK_CONDITION( a.valueSpecifier() == SL( "val" ) )
+
+	CHECK_CONDITION( !a.isDefined() )
+
+	GroupIface & g = add;
+
+	CHECK_CONDITION( !g.isRequired() )
+
+	g.setRequired();
+
+	CHECK_CONDITION( !g.isRequired() )
+
+	Command c( SL( "c" ), ValueOptions::ManyValues );
+
+	ArgIface & a2 = c;
+
+	CHECK_CONDITION( a2.isWithValue() )
 }
 
 

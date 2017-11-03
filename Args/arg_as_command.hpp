@@ -58,15 +58,19 @@ public:
 	explicit ArgAsCommand( T && name,
 		bool required = false,
 		ValueOptions opt = ValueOptions::NoValue )
-		:	m_name( name )
+		:	m_name( std::forward< T > ( name ) )
 		,	m_opt( opt )
 		,	m_required( required )
 		,	m_defined( false )
 	{
-		if( isArgument( name ) || isFlag( name ) )
+		if( details::isArgument( m_name ) || details::isFlag( m_name ) )
 			throw BaseException( String( SL( "ArgAsCommand's name can't "
 				"start with \"-\" whereas you are trying to set name to \"" ) ) +
-				name + SL( "\"." ) );
+				m_name + SL( "\"." ) );
+
+		if( m_name.empty() )
+			throw BaseException(
+				String( SL( "ArgAsCommand can't be with empty name." ) ) );
 
 		switch( m_opt )
 		{
@@ -89,6 +93,12 @@ public:
 
 	~ArgAsCommand()
 	{
+	}
+
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::ArgAsCommand;
 	}
 
 	/*!
@@ -181,6 +191,8 @@ public:
 	{
 		if( !m_values.empty() )
 			return m_values.front();
+		else if( !m_defaultValues.empty() )
+			return m_defaultValues.front();
 		else
 			return m_emptyString;
 	}
@@ -188,7 +200,63 @@ public:
 	//! \return All values for this argument.
 	const StringList & values() const
 	{
-		return m_values;
+		if( !m_values.empty() )
+			return m_values;
+		else
+			return m_defaultValues;
+	}
+
+	//! \return Default value.
+	const String & defaultValue() const
+	{
+		if( !m_defaultValues.empty() )
+			return m_defaultValues.front();
+		else
+			return m_emptyString;
+	}
+
+	//! Set default value. \note Value will be pushed back to the list
+	//! of default values.
+	void setDefaultValue( const String & v )
+	{
+		m_defaultValues.push_back( v );
+	}
+
+	//! \return Default values.
+	const StringList & defaultValues() const
+	{
+		return m_defaultValues;
+	}
+
+	//! Set default values.
+	void setDefaultValues( const StringList & v )
+	{
+		m_defaultValues = v;
+	}
+
+	//! \return Is given name a misspelled name of the argument.
+	bool isMisspelledName(
+		//! Name to check (misspelled).
+		const String & nm,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const override
+	{
+		if( details::isMisspelledName( nm, name() ) )
+		{
+			possibleNames.push_back( name() );
+
+			return true;
+		}
+		else
+			return false;
+	}
+
+	//! Clear state of the argument.
+	void clear() override
+	{
+		m_defined = false;
+
+		m_values.clear();
 	}
 
 protected:
@@ -200,12 +268,33 @@ protected:
 		\retval nullptr if this argument doesn't know about
 			argument with name.
 	*/
-	ArgIface * isItYou(
+	ArgIface * findArgument(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
 		*/
 		const String & name ) override
+	{
+		if( m_name == name )
+			return this;
+		else
+			return nullptr;
+	}
+
+	/*!
+		\return Argument for the given name.
+
+		\retval Pointer to the ArgIface if this argument handles
+			argument with the given name.
+		\retval nullptr if this argument doesn't know about
+			argument with name.
+	*/
+	const ArgIface * findArgument(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & name ) const override
 	{
 		if( m_name == name )
 			return this;
@@ -232,21 +321,17 @@ protected:
 				{
 					eatValues( context, m_values,
 						String( SL( "Argument \"" ) ) +
-							m_name + SL( "\" require value that wasn't presented." ),
+							m_name + SL( "\" requires value that wasn't presented." ),
 						cmdLine() );
 				}
 					break;
 
 				case ValueOptions::OneValue :
 				{
-					try {
-						m_values.push_back( eatOneValue( context, cmdLine() ) );
-					}
-					catch( const BaseException & )
-					{
-						throw BaseException( String( SL( "Argument \"" ) ) +
-							m_name + SL( "\" require value that wasn't presented." ) );
-					}
+					m_values.push_back( eatOneValue( context,
+						String( SL( "Argument \"" ) ) + m_name +
+							SL( "\" requires value that wasn't presented." ),
+						cmdLine() ) );
 				}
 					break;
 
@@ -273,7 +358,7 @@ protected:
 	{
 		UNUSED( flags )
 
-		if( isCorrectName( m_name ) )
+		if( details::isCorrectName( m_name ) )
 		{
 			auto it = std::find( names.begin(), names.end(), m_name );
 
@@ -284,7 +369,7 @@ protected:
 				names.push_back( m_name );
 		}
 		else
-			throw BaseException( String( SL( "Dissallowed name \"" ) ) +
+			throw BaseException( String( SL( "Disallowed name \"" ) ) +
 				m_name + SL( "\" for the argument." ) );
 	}
 
@@ -318,6 +403,8 @@ private:
 	String m_longDesc;
 	//! Values.
 	StringList m_values;
+	//! Default values.
+	StringList m_defaultValues;
 }; // class ArgAsCommand
 
 const String ArgAsCommand::m_emptyString;

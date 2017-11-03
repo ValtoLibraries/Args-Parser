@@ -46,9 +46,9 @@ using namespace Args;
 
 TEST( ArgTestCase, TestAllIsOk )
 {
-	const int argc = 7;
+	const int argc = 6;
 	const CHAR * argv[ argc ] = { SL( "program.exe" ),
-		SL( "-t" ), SL( "100" ),
+		SL( "-t=100" ),
 		SL( "--port" ), SL( "4545" ),
 		SL( "--host" ), SL( "any" ) };
 
@@ -56,11 +56,14 @@ TEST( ArgTestCase, TestAllIsOk )
 
 	Arg timeout( SL( 't' ), String( SL( "timeout" ) ), true );
 	Arg port( SL( 'p' ), String( SL( "port" ) ), true );
+	Arg d( SL( "default" ), true );
+	d.setDefaultValue( SL( "default" ) );
 	Arg host( SL( 'h' ), String( SL( "host" ) ), true );
 
 	cmd.addArg( &timeout );
 	cmd.addArg( &port );
 	cmd.addArg( &host );
+	cmd.addArg( d );
 
 	cmd.parse();
 
@@ -72,6 +75,9 @@ TEST( ArgTestCase, TestAllIsOk )
 
 	CHECK_CONDITION( host.isDefined() == true )
 	CHECK_CONDITION( host.value() == SL( "any" ) )
+
+	CHECK_CONDITION( d.isDefined() == false )
+	CHECK_CONDITION( d.value() == SL( "default" ) )
 }
 
 TEST( ArgTestCase, TestUndefinedArg )
@@ -133,6 +139,24 @@ TEST( ArgTestCase, TestUndefinedRequiredArg )
 	}
 
 	CHECK_CONDITION( false )
+}
+
+TEST( ArgTestCase, TestStuff )
+{
+	Arg a( SL( 't' ), String( SL( "timeout" ) ), true );
+
+	CHECK_CONDITION( a.value().empty() )
+	CHECK_CONDITION( a.defaultValue().empty() )
+
+	a.setDefaultValue( SL( "1" ) );
+
+	CHECK_CONDITION( a.value() == SL( "1" ) )
+	CHECK_CONDITION( a.defaultValue() == SL( "1" ) )
+
+	a.setValue( SL( "2" ) );
+
+	CHECK_CONDITION( a.value() == SL( "2" ) )
+	CHECK_CONDITION( a.defaultValue() == SL( "1" ) )
 }
 
 

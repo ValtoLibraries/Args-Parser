@@ -91,8 +91,16 @@ public:
 
 	virtual ~MultiArg();
 
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::MultiArg;
+	}
+
 	//! \return First value of this argument.
-	virtual const String & value() const;
+	const String & value() const override;
+	//! Set value. \note Value will be pushed back to the list of values.
+	void setValue( const String & v ) override;
 
 	//! \return All values for this argument.
 	virtual const StringList & values() const;
@@ -104,6 +112,41 @@ public:
 	*/
 	size_t count() const;
 
+	//! \return Default value.
+	const String & defaultValue() const override
+	{
+		if( !m_defaultValues.empty() )
+			return m_defaultValues.front();
+		else
+			return m_emptyString;
+	}
+
+	//! Set default value. \note Value will be pushed back to the list
+	//! of default values.
+	void setDefaultValue( const String & v ) override
+	{
+		m_defaultValues.push_back( v );
+	}
+
+	//! \return Default values.
+	const StringList & defaultValues() const
+	{
+		return m_defaultValues;
+	}
+
+	//! Set default values.
+	void setDefaultValues( const StringList & v )
+	{
+		m_defaultValues = v;
+	}
+
+	//! Clear state of the argument.
+	void clear() override
+	{
+		setDefined( false );
+
+		m_values.clear();
+	}
 
 protected:
 	/*!
@@ -118,11 +161,18 @@ protected:
 private:
 	DISABLE_COPY( MultiArg )
 
+	//! Dummy empty string.
+	static const String m_emptyString;
+
 	//! Values of this argument.
 	StringList m_values;
 	//! Counter.
 	size_t m_count;
+	//! Default values.
+	StringList m_defaultValues;
 }; // class MultiArg
+
+const String MultiArg::m_emptyString;
 
 
 //
@@ -163,14 +213,25 @@ MultiArg::value() const
 {
 	if( !m_values.empty() )
 		return m_values.front();
+	else if( !m_defaultValues.empty() )
+		return m_defaultValues.front();
 	else
-		return Arg::value();
+		return m_emptyString;
+}
+
+inline void
+MultiArg::setValue( const String & v )
+{
+	m_values.push_back( v );
 }
 
 inline const StringList &
 MultiArg::values() const
 {
-	return m_values;
+	if( !m_values.empty() )
+		return m_values;
+	else
+		return m_defaultValues;
 }
 
 inline size_t
@@ -178,8 +239,10 @@ MultiArg::count() const
 {
 	if( !isWithValue() )
 		return m_count;
-	else
+	else if( !m_values.empty() )
 		return m_values.size();
+	else
+		return m_defaultValues.size();
 }
 
 inline void
@@ -189,7 +252,7 @@ MultiArg::process( Context & context )
 	{
 		setDefined( eatValues( context, m_values,
 			String( SL( "Argument \"" ) ) +
-				name() + SL( "\" require value that wasn't presented." ),
+				name() + SL( "\" requires value that wasn't presented." ),
 			cmdLine() ) );
 	}
 	else

@@ -46,8 +46,13 @@
 // Args include.
 #include "types.hpp"
 
+// C++ include.
+#include <algorithm>
+#include <type_traits>
+
 
 namespace Args {
+
 
 //
 // DISABLE_COPY
@@ -67,6 +72,24 @@ namespace Args {
 #define UNUSED( Var ) (void)Var;
 
 
+namespace details {
+
+//
+// asConst
+//
+
+//! Adds const to non-const objects.
+template< typename T >
+constexpr typename std::add_const< T >::type &
+asConst( T & t ) noexcept
+{
+	return t;
+}
+
+template < typename T >
+void asConst( const T && ) = delete;
+
+
 //
 // isArgument
 //
@@ -75,12 +98,7 @@ namespace Args {
 static inline bool
 isArgument( const String & word )
 {
-	const String::size_type it = word.find( SL( "--" ) );
-
-	if( it == 0 )
-		return true;
-	else
-		return false;
+	return ( word.find( SL( "--" ) ) == 0 );
 } // isArgument
 
 
@@ -94,9 +112,7 @@ isFlag( const String & word )
 {
 	if( !isArgument( word ) )
 	{
-		const String::size_type it = word.find( SL( '-' ) );
-
-		if( it == 0 )
+		if( word.find( SL( '-' ) ) == 0 )
 			return true;
 	}
 
@@ -119,10 +135,7 @@ isCorrectFlag( const String & flag )
 		"abcdefghijklmnopqrstuvwxyz"
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ" ) );
 
-	if( availableSymbols.find( flag ) == String::npos )
-		return false;
-
-	return true;
+	return ( availableSymbols.find( flag ) != String::npos );
 } // isCorrectFlag
 
 
@@ -158,7 +171,7 @@ isCorrectName( const String & name )
 		"abcdefghijklmnopqrstuvwxyz"
 		"ABCDEFGHIJKLMNOPQRSTUVWXYZ-_" ) );
 
-	for( const Char & c : name )
+	for( const Char & c : asConst( name ) )
 	{
 		if( availableSymbols.find( c ) == String::npos )
 			return false;
@@ -166,6 +179,31 @@ isCorrectName( const String & name )
 
 	return true;
 } // isCorrectName
+
+
+//
+// isMisspelledName
+//
+
+//! \return Is the given name a misspelling of correct name.
+bool isMisspelledName( const String & misspelled,
+	const String & correct )
+{
+	if( !misspelled.empty() && !correct.empty() )
+	{
+		String ms = misspelled;
+		String cs = correct;
+
+		std::sort( ms.begin(), ms.end() );
+		std::sort( cs.begin(), cs.end() );
+
+		return ( ms == cs );
+	}
+	else
+		return false;
+}
+
+} /* namespace details */
 
 } /* namespace Args */
 

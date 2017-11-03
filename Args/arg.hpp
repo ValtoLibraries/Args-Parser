@@ -90,6 +90,12 @@ public:
 
 	virtual ~Arg();
 
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::Arg;
+	}
+
 	/*!
 		\return Name of the argument.
 
@@ -116,7 +122,7 @@ public:
 	//! \return Value of this argument.
 	virtual const String & value() const;
 	//! Set value.
-	void setValue( const String & v );
+	virtual void setValue( const String & v );
 
 	//! \return Flag.
 	const String & flag() const override;
@@ -143,6 +149,47 @@ public:
 	//! Set long description.
 	void setLongDescription( const String & desc );
 
+	//! \return Default value.
+	virtual const String & defaultValue() const
+	{
+		return m_defaultValue;
+	}
+
+	//! Set default value.
+	virtual void setDefaultValue( const String & v )
+	{
+		m_defaultValue = v;
+	}
+
+	//! \return Is given name a misspelled name of the argument.
+	bool isMisspelledName(
+		//! Name to check (misspelled).
+		const String & name,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const override
+	{
+		if( !argumentName().empty() )
+		{
+			if( details::isMisspelledName( name,
+				String( SL( "--" ) ) + argumentName() ) )
+			{
+				possibleNames.push_back( String( SL( "--" ) ) + argumentName() );
+
+				return true;
+			}
+		}
+
+		return false;
+	}
+
+	//! Clear state of the argument.
+	void clear() override
+	{
+		setDefined( false );
+
+		m_value.clear();
+	}
+
 protected:
 	/*!
 		\return Argument for the given name.
@@ -152,12 +199,43 @@ protected:
 		\retval nullptr if this argument doesn't know about
 			argument with name.
 	*/
-	ArgIface * isItYou(
+	ArgIface * findArgument(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
 		*/
-		const String & name ) override;
+		const String & name ) override
+	{
+		if( details::isArgument( name ) && name.substr( 2 ) == m_name )
+			return this;
+		else if( details::isFlag( name ) && name.substr( 1 ) == m_flag )
+			return this;
+		else
+			return nullptr;
+	}
+
+	/*!
+		\return Argument for the given name.
+
+		\retval Pointer to the ArgIface if this argument handles
+			argument with the given name.
+		\retval nullptr if this argument doesn't know about
+			argument with name.
+	*/
+	const ArgIface * findArgument(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & name ) const override
+	{
+		if( details::isArgument( name ) && name.substr( 2 ) == m_name )
+			return this;
+		else if( details::isFlag( name ) && name.substr( 1 ) == m_flag )
+			return this;
+		else
+			return nullptr;
+	}
 
 	/*!
 		Process argument's staff, for example take values from
@@ -204,6 +282,8 @@ private:
 	String m_description;
 	//! Long description.
 	String m_longDescription;
+	//! Default value.
+	String m_defaultValue;
 }; // class Arg
 
 
@@ -250,17 +330,6 @@ Arg::~Arg()
 {
 }
 
-inline ArgIface *
-Arg::isItYou( const String & name )
-{
-	if( isArgument( name ) && name.substr( 2 ) == m_name )
-		return this;
-	else if( isFlag( name ) && name.substr( 1 ) == m_flag )
-		return this;
-	else
-		return nullptr;
-}
-
 inline void
 Arg::process( Context & context )
 {
@@ -270,16 +339,12 @@ Arg::process( Context & context )
 			setDefined( true );
 		else
 		{
-			try {
-				setValue( eatOneValue( context, cmdLine() ) );
+			setValue( eatOneValue( context,
+				String( SL( "Argument \"" ) ) +	name() +
+					SL( "\" requires value that wasn't presented." ),
+				cmdLine() ) );
 
-				setDefined( true );
-			}
-			catch( const BaseException & )
-			{
-				throw BaseException( String( SL( "Argument \"" ) ) +
-					name() + SL( "\" requires value but it's not presented." ) );
-			}
+			setDefined( true );
 		}
 	}
 	else
@@ -302,7 +367,7 @@ Arg::checkCorrectnessBeforeParsing( StringList & flags,
 {
 	if( !m_flag.empty() )
 	{
-		if( isCorrectFlag( m_flag ) )
+		if( details::isCorrectFlag( m_flag ) )
 		{
 			const String flag = String( SL( "-" ) ) + m_flag;
 
@@ -315,13 +380,13 @@ Arg::checkCorrectnessBeforeParsing( StringList & flags,
 				flags.push_back( flag );
 		}
 		else
-			throw BaseException( String( SL( "Dissallowed flag \"-" ) ) +
+			throw BaseException( String( SL( "Disallowed flag \"-" ) ) +
 				m_flag + SL( "\"." ) );
 	}
 
 	if( !m_name.empty() )
 	{
-		if( isCorrectName( m_name ) )
+		if( details::isCorrectName( m_name ) )
 		{
 			const String name = String( SL( "--" ) ) + m_name;
 
@@ -334,13 +399,13 @@ Arg::checkCorrectnessBeforeParsing( StringList & flags,
 				names.push_back( name );
 		}
 		else
-			throw BaseException( String( SL( "Dissallowed name \"--" ) ) +
+			throw BaseException( String( SL( "Disallowed name \"--" ) ) +
 				m_name + SL( "\"." ) );
 	}
 
 	if( m_flag.empty() && m_name.empty() )
 		throw BaseException( String( SL( "Arguments with empty flag and name "
-			"are dissallowed." ) ) );
+			"are disallowed." ) ) );
 }
 
 inline void
@@ -390,7 +455,10 @@ Arg::setDefined( bool on )
 inline const String &
 Arg::value() const
 {
-	return m_value;
+	if( !m_value.empty() )
+		return m_value;
+	else
+		return m_defaultValue;
 }
 
 inline void

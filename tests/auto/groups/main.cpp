@@ -57,11 +57,11 @@ TEST( GroupCase, TestOnlyOneAllIsOk )
 	Arg host( SL( 'h' ), String( SL( "host" ) ), true );
 
 	OnlyOneGroup g( SL( "only_one" ) );
+	cmd.addArg( g );
+
 	g.addArg( timeout );
 	g.addArg( port );
 	g.addArg( host );
-
-	cmd.addArg( g );
 
 	cmd.parse();
 
@@ -88,11 +88,11 @@ TEST( GroupCase, TestOnlyOneFailed )
 	Arg host( SL( 'h' ), String( SL( "host" ) ), true );
 
 	OnlyOneGroup g( SL( "only_one" ) );
-	g.addArg( timeout );
-	g.addArg( port );
-	g.addArg( host );
+	cmd.addArg( &g );
 
-	cmd.addArg( g );
+	g.addArg( &timeout );
+	g.addArg( &port );
+	g.addArg( &host );
 
 	CHECK_THROW( cmd.parse(), BaseException )
 }
@@ -360,6 +360,20 @@ TEST( GroupCase, GroupsFailed )
 	cmd.addArg( g );
 
 	CHECK_THROW( cmd.parse(), BaseException )
+}
+
+TEST( GroupCase, GroupsStuff )
+{
+	OnlyOneGroup one( SL( "only_one" ) );
+
+	const GroupIface & g = one;
+
+	CHECK_CONDITION( !g.isWithValue() )
+	CHECK_CONDITION( g.flag().empty() )
+	CHECK_CONDITION( g.argumentName().empty() )
+	CHECK_CONDITION( g.valueSpecifier().empty() )
+	CHECK_CONDITION( g.description().empty() )
+	CHECK_CONDITION( g.longDescription().empty() )
 }
 
 

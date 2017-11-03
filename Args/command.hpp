@@ -55,16 +55,20 @@ class Command final
 
 public:
 	template< typename T >
-	explicit Command( T && name,
+	explicit Command( T && nm,
 		ValueOptions opt = ValueOptions::NoValue )
-		:	GroupIface( name )
+		:	GroupIface( std::forward< T > ( nm ) )
 		,	m_opt( opt )
 		,	m_isDefined( false )
 	{
-		if( isArgument( name ) || isFlag( name ) )
+		if( details::isArgument( name() ) || details::isFlag( name() ) )
 			throw BaseException( String( SL( "Command's name can't "
 				"start with \"-\" whereas you are trying to set name to \"" ) ) +
-				name + SL( "\"." ) );
+				name() + SL( "\"." ) );
+
+		if( name().empty() )
+			throw BaseException(
+				String( SL( "Command can't be with empty name." ) ) );
 
 		switch( m_opt )
 		{
@@ -87,6 +91,12 @@ public:
 
 	virtual ~Command()
 	{
+	}
+
+	//! \return Type of the argument.
+	ArgType type() const override
+	{
+		return ArgType::Command;
 	}
 
 	//! \return Is this command defined?
@@ -149,6 +159,8 @@ public:
 	{
 		if( !m_values.empty() )
 			return m_values.front();
+		else if( !m_defaultValues.empty() )
+			return m_defaultValues.front();
 		else
 			return m_dummyEmptyString;
 	}
@@ -156,19 +168,98 @@ public:
 	//! \return All values for this argument.
 	const StringList & values() const
 	{
-		return m_values;
+		if( !m_values.empty() )
+			return m_values;
+		else
+			return m_defaultValues;
+	}
+
+	//! \return Default value.
+	const String & defaultValue() const
+	{
+		if( !m_defaultValues.empty() )
+			return m_defaultValues.front();
+		else
+			return m_dummyEmptyString;
+	}
+
+	//! Set default value. \note Value will be pushed back to the list
+	//! of default values.
+	void setDefaultValue( const String & v )
+	{
+		m_defaultValues.push_back( v );
+	}
+
+	//! \return Default values.
+	const StringList & defaultValues() const
+	{
+		return m_defaultValues;
+	}
+
+	//! Set default values.
+	void setDefaultValues( const StringList & v )
+	{
+		m_defaultValues = v;
+	}
+
+	//! \return Is given name a misspelled name of the argument.
+	bool isMisspelledName(
+		//! Name to check (misspelled).
+		const String & nm,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const override
+	{
+		bool ret = false;
+
+		if( details::isMisspelledName( nm, name() ) )
+		{
+			possibleNames.push_back( name() );
+
+			ret = true;
+		}
+
+		if( GroupIface::isMisspelledName( nm, possibleNames ) )
+			return true;
+		else
+			return ret;
+	}
+
+	//! \return Is given name a misspelled name of the command.
+	bool isMisspelledCommand(
+		//! Name to check (misspelled).
+		const String & nm,
+		//! List of possible names for the given misspelled name.
+		StringList & possibleNames ) const
+	{
+		if( details::isMisspelledName( nm, name() ) )
+		{
+			possibleNames.push_back( name() );
+
+			return true;
+		}
+		else
+			return false;
+	}
+
+	//! Clear state of the argument.
+	void clear() override
+	{
+		m_isDefined = false;
+
+		m_values.clear();
+
+		GroupIface::clear();
 	}
 
 protected:
 	/*!
 		\return Argument for the given name.
 
-		\retval Pointer to the ArgIface if this argument handles
-			argument with the given name.
-		\retval nullptr if this argument doesn't know about
-			argument with name.
+		\retval this if the given name is the name of the command.
+
+		\note Doesn't look in the children.
 	*/
-	ArgIface * isItYou(
+	ArgIface * findArgument(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
@@ -184,19 +275,61 @@ protected:
 	/*!
 		\return Argument for the given name.
 
+		\retval this if the given name is the name of the command.
+
+		\note Doesn't look in the children.
+	*/
+	const ArgIface * findArgument(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & n ) const override
+	{
+		if( name() == n )
+			return this;
+		else
+			return nullptr;
+	}
+
+	/*!
+		\return Argument for the given name.
+
 		\retval Pointer to the ArgIface if this argument handles
 			argument with the given name.
 		\retval nullptr if this argument doesn't know about
 			argument with name.
+
+		\note Looks only in children.
 	*/
-	ArgIface * isItYourChild(
+	ArgIface * findChild(
 		/*!
 			Name of the argument. Can be for example "-t" or
 			"--timeout".
 		*/
 		const String & name )
 	{
-		return GroupIface::isItYou( name );
+		return GroupIface::findArgument( name );
+	}
+
+	/*!
+		\return Argument for the given name.
+
+		\retval Pointer to the ArgIface if this argument handles
+			argument with the given name.
+		\retval nullptr if this argument doesn't know about
+			argument with name.
+
+		\note Looks only in children.
+	*/
+	const ArgIface * findChild(
+		/*!
+			Name of the argument. Can be for example "-t" or
+			"--timeout".
+		*/
+		const String & name ) const
+	{
+		return GroupIface::findArgument( name );
 	}
 
 	/*!
@@ -216,21 +349,17 @@ protected:
 			{
 				eatValues( ctx, m_values,
 					String( SL( "Command \"" ) ) +
-						name() + SL( "\" require value that wasn't presented." ),
+						name() + SL( "\" requires value that wasn't presented." ),
 					cmdLine() );
 			}
 				break;
 
 			case ValueOptions::OneValue :
 			{
-				try {
-					m_values.push_back( eatOneValue( ctx, cmdLine() ) );
-				}
-				catch( const BaseException & )
-				{
-					throw BaseException( String( SL( "Command \"" ) ) +
-						name() + SL( "\" require value that wasn't presented." ) );
-				}
+				m_values.push_back( eatOneValue( ctx,
+					String( SL( "Command \"" ) ) + name() +
+						SL( "\" requires value that wasn't presented." ),
+					cmdLine() ) );
 			}
 				break;
 
@@ -251,7 +380,7 @@ protected:
 		//! All known names.
 		StringList & names ) const override
 	{
-		if( isCorrectName( name() ) )
+		if( details::isCorrectName( name() ) )
 		{
 			auto it = std::find( names.begin(), names.end(), name() );
 
@@ -262,7 +391,7 @@ protected:
 				names.push_back( name() );
 		}
 		else
-			throw BaseException( String( SL( "Dissallowed name \"" ) ) +
+			throw BaseException( String( SL( "Disallowed name \"" ) ) +
 				name() + SL( "\" for the command." ) );
 
 		StringList ftmp = flags;
@@ -293,6 +422,8 @@ private:
 	bool m_isDefined;
 	//! Values.
 	StringList m_values;
+	//! Default values.
+	StringList m_defaultValues;
 }; // class Command
 
 } /* namespace Args */

@@ -33,14 +33,37 @@
 
 // Args include.
 #include "arg.hpp"
-#include "help_printer.hpp"
+#include "help_printer_iface.hpp"
 #include "context.hpp"
 #include "utils.hpp"
 #include "exceptions.hpp"
 #include "types.hpp"
 
+// C++ include.
+#include <memory>
+
+#ifdef ARGS_TESTING
+	#ifndef ARGS_QSTRING_BUILD
+		// C++ include.
+		#include <sstream>
+	#endif
+#endif
+
 
 namespace Args {
+
+#ifdef ARGS_TESTING
+	#ifdef ARGS_WSTRING_BUILD
+		extern std::wstringstream g_argsOutStream;
+	#elif defined( ARGS_QSTRING_BUILD )
+		extern OutStreamType g_argsOutStream;
+	#else
+		extern std::stringstream g_argsOutStream;
+	#endif
+#else
+	OutStreamType & g_argsOutStream = outStream();
+#endif // ARGS_TESTING
+
 
 //
 // Help
@@ -77,12 +100,12 @@ protected:
 	{
 		Arg::setCmdLine( cmdLine );
 
-		m_printer.setCmdLine( cmdLine );
+		m_printer->setCmdLine( cmdLine );
 	}
 
 private:
 	//! Printer.
-	HelpPrinter m_printer;
+	std::unique_ptr< HelpPrinterIface > m_printer;
 	//! Throw or not exception?
 	bool m_throwExceptionOnPrint;
 }; // class Help
@@ -92,31 +115,22 @@ private:
 // Help
 //
 
-inline
-Help::Help( bool throwExceptionOnPrint )
-	:	Arg( SL( 'h' ), SL( "help" ), true, false )
-	,	m_throwExceptionOnPrint( throwExceptionOnPrint )
-{
-	setDescription( SL( "Print this help." ) );
-	setLongDescription( SL( "Print this help." ) );
-}
-
 inline void
 Help::setExecutable( const String & exe )
 {
-	m_printer.setExecutable( exe );
+	m_printer->setExecutable( exe );
 }
 
 inline void
 Help::setAppDescription( const String & desc )
 {
-	m_printer.setAppDescription( desc );
+	m_printer->setAppDescription( desc );
 }
 
 inline void
 Help::setLineLength( String::size_type length )
 {
-	m_printer.setLineLength( length );
+	m_printer->setLineLength( length );
 }
 
 inline void
@@ -127,35 +141,30 @@ Help::process( Context & context )
 		const String arg = *context.next();
 
 		// Argument or flag.
-		if( isArgument( arg ) || isFlag( arg ) )
-			m_printer.print( arg, outStream() );
+		if( details::isArgument( arg ) || details::isFlag( arg ) )
+			m_printer->print( arg, g_argsOutStream );
 		// Command?
 		else
 		{
-			try {
-				ArgIface * tmp = cmdLine()->findArgument( arg );
+			auto * tmp = m_printer->findArgument( arg );
 
-				Command * cmd = dynamic_cast< Command* > ( tmp );
-
-				// Command.
-				if( cmd )
-				{
-					if( !context.atEnd() )
-						m_printer.print( cmd, *context.next(), outStream() );
-					else
-						m_printer.print( arg, outStream() );
-				}
-				else
-					m_printer.print( arg, outStream() );
-			}
-			catch( const BaseException & )
+			// Command.
+			if( tmp && tmp->type() == ArgType::Command )
 			{
-				m_printer.print( outStream() );
+				if( !context.atEnd() )
+					m_printer->print( static_cast< Command* > ( tmp ),
+						*context.next(), g_argsOutStream );
+				else
+					m_printer->print( arg, g_argsOutStream );
 			}
+			else if( tmp )
+				m_printer->print( arg, g_argsOutStream );
+			else
+				m_printer->print( g_argsOutStream );
 		}
 	}
 	else
-		m_printer.print( outStream() );
+		m_printer->print( g_argsOutStream );
 
 	setDefined( true );
 

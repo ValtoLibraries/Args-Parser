@@ -32,24 +32,43 @@
 #define ARGS__TYPES_HPP__INCLUDED
 
 #ifdef ARGS_WSTRING_BUILD
+	// C++ include.
+	#include <string>
+	#include <iostream>
 
-// C++ include.
-#include <string>
-#include <list>
-#include <iostream>
+	#ifdef ARGS_LIST
+		#include <list>
+	#elif defined( ARGS_DEQUE )
+		#include <deque>
+	#else
+		#include <vector>
+	#endif
 
 #elif defined( ARGS_QSTRING_BUILD )
+	// Qt include.
+	#include <QString>
+	#include <QTextStream>
 
-// Qt include.
-#include <QString>
-#include <QTextStream>
+	#ifdef ARGS_LIST
+		#include <QLinkedList>
+	#elif defined( ARGS_DEQUE )
+		#include <QList>
+	#else
+		#include <QVector>
+	#endif
 
 #else
+	// C++ include.
+	#include <string>
+	#include <iostream>
 
-// C++ include.
-#include <string>
-#include <list>
-#include <iostream>
+	#ifdef ARGS_LIST
+		#include <list>
+	#elif defined( ARGS_DEQUE )
+		#include <deque>
+	#else
+		#include <vector>
+	#endif
 
 #endif
 
@@ -64,9 +83,6 @@ using String = std::wstring;
 //! Char type.
 using Char = String::value_type;
 
-//! List of strings.
-using StringList = std::list< String >;
-
 //! Out stream type.
 using OutStreamType = std::wostream;
 
@@ -77,6 +93,15 @@ static OutStreamType & outStream()
 }
 
 #define SL(str) L##str
+
+//! List of strings.
+#ifdef ARGS_LIST
+	using StringList = std::list< String >;
+#elif defined( ARGS_DEQUE )
+	using StringList = std::deque< String >;
+#else
+	using StringList = std::vector< String >;
+#endif
 
 #elif defined( ARGS_QSTRING_BUILD )
 
@@ -227,6 +252,11 @@ public:
 		return String( ch + s2.m_str );
 	}
 
+	friend bool operator < ( const String & s1, const String & s2 )
+	{
+		return s1.m_str < s2.m_str;
+	}
+
 	friend OutStreamType & operator << ( OutStreamType & to,
 		const String & what )
 	{
@@ -264,9 +294,6 @@ private:
 	QString m_str;
 }; // class String
 
-//! List of strings.
-using StringList = std::list< String >;
-
 //! Output stream.
 static OutStreamType & outStream()
 {
@@ -277,6 +304,15 @@ static OutStreamType & outStream()
 
 #define SL(str) str
 
+//! List of strings.
+#ifdef ARGS_LIST
+	using StringList = QLinkedList< String >;
+#elif defined( ARGS_DEQUE )
+	using StringList = QList< String >;
+#else
+	using StringList = QVector< String >;
+#endif
+
 #else
 
 //! String type.
@@ -284,9 +320,6 @@ using String = std::string;
 
 //! Char type.
 using Char = String::value_type;
-
-//! List of strings.
-using StringList = std::list< String >;
 
 //! Out stream type.
 using OutStreamType = std::ostream;
@@ -299,7 +332,45 @@ static OutStreamType & outStream()
 
 #define SL(str) str
 
+//! List of strings.
+#ifdef ARGS_LIST
+	using StringList = std::list< String >;
+#elif defined( ARGS_DEQUE )
+	using StringList = std::deque< String >;
+#else
+	using StringList = std::vector< String >;
 #endif
+
+#endif
+
+
+namespace details {
+
+//
+// Deleter
+//
+
+//! Deleter.
+template< typename T >
+class Deleter {
+public:
+	explicit Deleter( bool shouldIDelete )
+		:	m_delete( shouldIDelete )
+	{
+	}
+
+	void operator () ( T * obj ) noexcept
+	{
+		if( m_delete )
+			delete obj;
+	}
+
+private:
+	//! Should deleter delete object?
+	bool m_delete;
+}; // class Deleter
+
+} /* namespace details */
 
 } /* namespace Args */
 

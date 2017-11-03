@@ -44,7 +44,7 @@ using namespace Args;
 #endif
 
 
-TEST( MultiArgTestCase, TestAllIsOk )
+TEST( MultiArgTestCase, TestAllIsOk1 )
 {
 	const int argc = 10;
 	const CHAR * argv[ argc ] = { SL( "program.exe" ),
@@ -136,6 +136,66 @@ TEST( MultiArgTestCase, TestAllIsOk2 )
 	CHECK_CONDITION( timeout.value().empty() )
 }
 
+TEST( MultiArgTestCase, TestAllIsOk3 )
+{
+	const int argc = 5;
+	const CHAR * argv[ argc ] = { SL( "program.exe" ),
+		SL( "-m" ),	SL( "-m" ),
+		SL( "-m" ), SL( "-m" ) };
+
+	CmdLine cmd( argc, argv );
+
+	MultiArg multi( SL( 'm' ), String( SL( "multi" ) ), false, true );
+
+	cmd.addArg( multi );
+
+	cmd.parse();
+
+	CHECK_CONDITION( multi.isDefined() == true )
+	CHECK_CONDITION( multi.count() == 4 )
+}
+
+TEST( MultiArgTestCase, TestAllIsOk4 )
+{
+	const int argc = 1;
+	const CHAR * argv[ argc ] = { SL( "program.exe" ) };
+
+	CmdLine cmd( argc, argv );
+
+	MultiArg multi( SL( 'm' ), String( SL( "multi" ) ), true, false );
+	multi.setDefaultValue( SL( "default" ) );
+
+	cmd.addArg( multi );
+
+	cmd.parse();
+
+	CHECK_CONDITION( multi.isDefined() == false )
+	CHECK_CONDITION( multi.value() == SL( "default" ) )
+	CHECK_CONDITION( multi.values().size() == 1 )
+	CHECK_CONDITION( multi.values().front() == SL( "default" ) )
+}
+
+TEST( MultiArgTestCase, TestAllIsOk5 )
+{
+	const int argc = 1;
+	const CHAR * argv[ argc ] = { SL( "program.exe" ) };
+
+	CmdLine cmd( argc, argv );
+
+	MultiArg multi( SL( 'm' ), String( SL( "multi" ) ), true, false );
+
+	cmd.addArg( multi );
+
+	cmd.parse();
+
+	CHECK_CONDITION( multi.isDefined() == false )
+	CHECK_CONDITION( multi.value().empty() )
+	CHECK_CONDITION( multi.values().size() == 0 )
+	CHECK_CONDITION( multi.count() == 0 )
+	CHECK_CONDITION( multi.defaultValue().empty() )
+	CHECK_CONDITION( multi.defaultValues().empty() )
+}
+
 TEST( MultiArgTestCase, NotDefinedValue )
 {
 	const int argc = 8;
@@ -157,7 +217,7 @@ TEST( MultiArgTestCase, NotDefinedValue )
 	catch( const BaseException & x )
 	{
 		CHECK_CONDITION( x.desc() == String( SL( "Argument \"--multi"
-			"\" require value that wasn't presented." ) ) )
+			"\" requires value that wasn't presented." ) ) )
 
 		return;
 	}
@@ -189,12 +249,41 @@ TEST( MultiArgTestCase, NotDefinedValue2 )
 	catch( const BaseException & x )
 	{
 		CHECK_CONDITION( x.desc() == String( SL( "Argument \"--multi"
-			"\" require value that wasn't presented." ) ) )
+			"\" requires value that wasn't presented." ) ) )
 
 		return;
 	}
 
 	CHECK_CONDITION( false )
+}
+
+TEST( MultiArgTestCase, TestStuff )
+{
+	MultiArg multi( SL( 'm' ), String( SL( "multi" ) ), true );
+
+	Arg & arg = multi;
+
+	CHECK_CONDITION( arg.defaultValue().empty() )
+	CHECK_CONDITION( multi.defaultValues().empty() )
+	CHECK_CONDITION( arg.value().empty() )
+
+	arg.setDefaultValue( SL( "1" ) );
+
+	CHECK_CONDITION( arg.defaultValue() == SL( "1" ) )
+	CHECK_CONDITION( multi.defaultValues().size() == 1 )
+	CHECK_CONDITION( multi.defaultValues().front() == SL( "1" ) )
+	CHECK_CONDITION( arg.value() == SL( "1" ) )
+	CHECK_CONDITION( multi.values().size() == 1 )
+	CHECK_CONDITION( multi.values().front() == SL( "1" ) )
+
+	arg.setValue( SL( "2" ) );
+
+	CHECK_CONDITION( arg.defaultValue() == SL( "1" ) )
+	CHECK_CONDITION( multi.defaultValues().size() == 1 )
+	CHECK_CONDITION( multi.defaultValues().front() == SL( "1" ) )
+	CHECK_CONDITION( arg.value() == SL( "2" ) )
+	CHECK_CONDITION( multi.values().size() == 1 )
+	CHECK_CONDITION( multi.values().front() == SL( "2" ) )
 }
 
 

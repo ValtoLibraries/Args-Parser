@@ -7,4 +7,7 @@ SUBDIRS = samples \
 OTHER_FILES = README.md \
 	doc/mainpage.dox \
 	doc/example.cpp \
-	doc/help.txt
+	doc/help.txt \
+	.travis.yml \
+	doc/Doxyfile \
+	doc/oneline.cpp
