@@ -10,4 +10,7 @@ OTHER_FILES = README.md \
 	doc/help.txt \
 	.travis.yml \
 	doc/Doxyfile \
-	doc/oneline.cpp
+	doc/oneline.cpp \
+	ArgsConfig.cmake.in
+
+include( Args/Args.pri )

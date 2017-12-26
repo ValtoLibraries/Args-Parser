@@ -1,24 +1,8 @@
-[![Build Status](https://travis-ci.org/igormironchik/args-parser.svg?branch=master)](https://travis-ci.org/igormironchik/args-parser)[![Build status](https://ci.appveyor.com/api/projects/status/p9jg1bgicqvoryh1?svg=true)](https://ci.appveyor.com/project/igormironchik/args-parser)[![Coverage Status](https://coveralls.io/repos/github/igormironchik/args-parser/badge.svg?branch=master)](https://coveralls.io/github/igormironchik/args-parser?branch=master)
+[![Build Status](https://travis-ci.org/igormironchik/args-parser.svg?branch=master)](https://travis-ci.org/igormironchik/args-parser)[![Build status](https://ci.appveyor.com/api/projects/status/p9jg1bgicqvoryh1/branch/master?svg=true)](https://ci.appveyor.com/project/igormironchik/args-parser/branch/master)[![Coverage Status](https://coveralls.io/repos/github/igormironchik/args-parser/badge.svg?branch=master)](https://coveralls.io/github/igormironchik/args-parser?branch=master)[![Coverity Scan](https://scan.coverity.com/projects/14278/badge.svg)](https://scan.coverity.com/projects/igormironchik-args-parser)[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 This is Args.
 
 Args is a small C++ header-only library for parsing command line arguments.
-
-# Compilling
-
-Just run build.rb which is a Ruby program and a project file or use QMake
-or CMake project.
-
-# Requirements
-
-For compiling Args with Ruby you should have installed:
-
- * Ruby programming language (http://www.ruby-lang.org/en/)
- * mxx_ru Ruby gem (https://sourceforge.net/p/mxxru/wiki/Home/)
-
-or use
-
- * QMake, CMake
 
 # Syntax
 
@@ -35,7 +19,7 @@ of arguments can be specified more than once in the command line. And the result
 of the argument will be ```StringList```.
  * ```Command``` class can be used to define command in command line interface.
 Command is the argument without dash/dashes at the beginning, ```add``` for example.
- * Command can has children arguments or even subcommands. Subcommand can be
+ * ```Command``` can has children arguments or even subcommands. Subcommand can be
 added using ```ArgAsCommand``` class.
  * In Args groups can be used to group arguments into groups to check their
 definitions after parsing, so if constraint of group will be violated
@@ -80,6 +64,35 @@ arguments, so it will be possible to initialize argument in one line?
 
  * This is impossible because constructors will be ambiguous but you can use
 auxiliary API that allows to define arguments in one line of code.
+
+How can I add Args to my project?
+
+ * The simplest way is just copy Args directory with headers to any location in
+your project. With CMake you can clone entire Args project somewhere in your
+project and just do ```add_subdirectory()```, if you will do so you have to
+add include directory path to your project with
+```include_directories( ${Args_INCLUDE_DIRECTORIES} )```. With QMake you can
+use ```Args/Args.pri```.
+
+ * You can clone/download Args, build and install Args with CMake. In this
+case it will be possible to use ```find_package( Args )``` in CMakeLists.txt of
+your project, and sure you can use ```${Args_INCLUDE_DIRECTORIES}``` in your
+CMake scripts.
+
+What does ```build.rb``` file for?
+
+ * ```build.rb``` is Ruby program for building Args, this is project file for
+Mxx_ru build system. In most cases this file is not necessary and can be simply
+ignored. Long time ago I used Mxx_ru as build system in my projects and this
+file is just because of historical reasons. In the subdirectories you can find
+different Ruby scripts, like ```prj.rb```, these files are project files for
+corresponding subprojects (examples/tests) for Mxx_ru build system.
+
+What does ```runtests.rb``` file for?
+
+ * ```runtests.rb``` is simple Ruby script to launch all tests. This file is
+copying to build directory by CMake and QMake and can be used to launch tests.
+And sure with CMake you can use ctest executable to launch tests too.
           
 # Example
 
@@ -117,8 +130,8 @@ int main( int argc, char ** argv )
         .addArgWithFlagOnly( 'd', false, false,
           "Do NOT job." )
       .end()
-      .addArgWithFlagAndName( 'r', "recurcieve", false, false,
-        "Do operation recurcively?" )
+      .addArgWithFlagAndName( 'r', "recursive", false, false,
+        "Do operation recursively?" )
       .addHelp( true, argv[ 0 ],
         "This application just show power of the Args help." );
 
@@ -240,15 +253,15 @@ Help output for the example with the old syntax.
 ```
 This application just show the power of Args.
 
-Usage: sample.help.exe -s, --host <arg> -p, --port <arg> [ -h, --help <arg> ]
+USAGE: sample.help.exe -s, --host <arg> -p, --port <arg> [ -h, --help <arg> ]
        [ --timeout <ms> ]
 
-Required arguments:
+REQUIRED:
  -s, --host <arg>   Host. Can be "localhost", "any" or regular IP.
 
  -p, --port <arg>   Port number to create socket.
 
-Optional arguments:
+OPTIONAL:
  -h, --help <arg>   Print this help.
 
      --timeout <ms> Timeout before new messages will be sent in milliseconds.
